@@ -138,6 +138,7 @@
 
       /* Map, full width on top */
       .map-frame {
+        position: relative;
         border-radius: 20px; overflow: hidden;
         border: 1px solid var(--line); box-shadow: var(--shadow);
         background: var(--paper-deep);
@@ -147,7 +148,7 @@
       #static-map-wrap img { display: block; width: 100%; height: auto; }
       .map-notices { font-size: 0.78rem; padding: 8px 12px; background: var(--card); }
       .map-notices a { color: var(--ink-soft); }
-      .map-hint { color: var(--ink-faint); font-size: 0.88rem; margin: 10px 2px 0; }
+      .map-hint { color: var(--ink-faint); font-size: 0.88rem; margin: 0 2px 8px; }
 
       /* Pins (hatch map markers) */
       .pin {
@@ -165,13 +166,21 @@
       .carousel-head {
         display: flex; align-items: center; justify-content: space-between;
         gap: 14px; flex-wrap: wrap;
-        margin: 26px 0 12px;
+        margin: 14px 0 10px;
       }
       .carousel-head h2 {
         font-family: "Bricolage Grotesque", "Archivo", sans-serif;
         font-size: 1.45rem; font-weight: 700; margin: 0; line-height: 1.15;
       }
-      .view-count { color: var(--ink-soft); font-size: 0.95rem; margin: 3px 0 0; }
+      .view-count {
+        position: absolute; left: 12px; bottom: 12px; z-index: 10;
+        margin: 0; pointer-events: none;
+        background: var(--card); color: var(--ink-soft);
+        border: 1px solid var(--line); box-shadow: 0 4px 14px rgba(33, 19, 9, 0.14);
+        font-size: 0.78rem; font-weight: 600; line-height: 1.25;
+        padding: 6px 11px; border-radius: 999px;
+        max-width: calc(100% - 76px);
+      }
       .carousel-nav { display: flex; align-items: center; gap: 8px; flex: none; }
       .car-pos { color: var(--ink-faint); font-size: 0.9rem; font-weight: 600; min-width: 52px; text-align: center; }
       .car-btn {
@@ -355,6 +364,7 @@
         <button type="button" class="btn claim-open">Claim your free listing</button>
       </section>
 
+      <p class="map-hint" id="map-hint">Pan or zoom the map and the restaurants below update to match what you can see.</p>
       <div class="map-frame">
         <div id="map" role="application" aria-label="Map of restaurants with deals running today"></div>
         <div id="static-map-wrap">
@@ -363,13 +373,12 @@
             <a href="https://www.facebook.com/maps/attribution_terms" target="_blank" rel="noopener">© OpenStreetMap contributors, Map Data Legal Notices</a>
           </div>
         </div>
+        <p class="view-count" id="view-count">Loading today's restaurants…</p>
       </div>
-      <p class="map-hint" id="map-hint">Pan or zoom the map and the restaurants below update to match what you can see.</p>
 
       <div class="carousel-head">
         <div>
           <h2>Restaurants</h2>
-          <p class="view-count" id="view-count">Loading today's restaurants…</p>
         </div>
         <div class="carousel-nav">
           <button type="button" class="show-all-btn" id="show-all-btn">Show all restaurants</button>
