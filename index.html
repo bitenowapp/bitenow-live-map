@@ -607,19 +607,22 @@
           updateCarPos();
         }
 
-        /* Card positions are measured against the carousel's own box, not
-           offsetLeft: offsetLeft is relative to the page, scrollLeft is in
-           scroll coordinates, and mixing the two shifted the detected index
-           one card forward, which made Previous target the card already on
-           screen and appear dead. */
+        /* The current card is the leftmost FULLY visible card: the first
+           visible card whose left edge is at or after the carousel's
+           content-box left edge (its bounding-box left plus its left
+           padding, which is where scroll-snap aligns a card). Returning
+           the first such card — not the last card within some fraction of
+           the width — keeps the indicator, Next and Previous in step:
+           at rest the snapped card's left edge sits exactly on that edge,
+           a card scrolled partly off the left fails the test, and the
+           next card is the first to pass it. */
         function currentVisibleIndex(vis, track) {
-          var current = 0;
-          var trackLeft = track.getBoundingClientRect().left;
-          var threshold = track.clientWidth * 0.5;
+          var padLeft = parseFloat(window.getComputedStyle(track).paddingLeft) || 0;
+          var visibleLeft = track.getBoundingClientRect().left + padLeft;
           for (var i = 0; i < vis.length; i++) {
-            if (vis[i].getBoundingClientRect().left - trackLeft < threshold) current = i;
+            if (vis[i].getBoundingClientRect().left >= visibleLeft - 2) return i;
           }
-          return current;
+          return vis.length - 1;
         }
 
         function updateCarPos() {
@@ -631,8 +634,10 @@
           var track = document.getElementById('carousel');
           var current = currentVisibleIndex(vis, track);
           pos.textContent = (current + 1) + ' of ' + vis.length;
-          prev.disabled = current === 0 && track.scrollLeft <= 4;
-          next.disabled = current === vis.length - 1;
+          prev.disabled = current === 0;
+          var maxScroll = track.scrollWidth - track.clientWidth;
+          next.disabled = current === vis.length - 1 ||
+            (maxScroll > 4 && track.scrollLeft >= maxScroll - 4);
         }
 
         function scrollCarouselTo(row, smooth) {
