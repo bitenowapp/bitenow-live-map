@@ -6,6 +6,18 @@
     <meta name="color-scheme" content="light dark" />
     <link rel="icon" href="data:," />
     <title>BiteNow Live Deals Map</title>
+    <script>
+      (function () {
+        try {
+          var embedded = false;
+          try { embedded = window.self !== window.top; } catch (e) { embedded = true; }
+          if (!embedded) {
+            try { embedded = new URLSearchParams(window.location.search).get('embed') === '1'; } catch (e) {}
+          }
+          if (embedded) document.documentElement.classList.add('is-embed');
+        } catch (e) {}
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&display=swap" rel="stylesheet" />
@@ -44,6 +56,12 @@
         }
       }
       * { box-sizing: border-box; }
+      /* Embed mode: hide the top header block and the top claim banner so
+         the embedded view starts directly with the map. */
+      html.is-embed header.site,
+      html.is-embed .hero,
+      html.is-embed .claim:not(.bottom) { display: none !important; }
+      html.is-embed .wrap { padding-top: 14px; }
       html, body { margin: 0; padding: 0; }
       body {
         background: var(--paper);
@@ -223,6 +241,11 @@
         display: inline-flex; align-items: center; min-height: 44px;
       }
       .btn-app:hover { background: var(--flame-dark); }
+      .store-btns { display: flex; gap: 8px; width: 100%; }
+      .btn-store {
+        flex: 1 1 0; justify-content: center; text-align: center;
+        padding: 11px 10px; font-size: 0.88rem; line-height: 1.25;
+      }
       .btn-dir {
         background: transparent; color: var(--ink); text-decoration: none; font-weight: 600;
         padding: 11px 18px; border-radius: 999px; font-size: 0.97rem;
@@ -551,7 +574,8 @@
                 id: rest._id,
                 name: rest.name || rest.restaurantName || 'Restaurant',
                 address: rest.address || '',
-                lat: lat, lng: lng, deals: [], anyOnNow: false
+                lat: lat, lng: lng, deals: [], anyOnNow: false,
+                listingStatus: rest.listingStatus
               };
               order.push(groups[rest._id]);
             }
@@ -608,17 +632,23 @@
         }
 
         /* The current card is the leftmost FULLY visible card: the first
-           visible card whose left edge is at or after the carousel's
-           content-box left edge (its bounding-box left plus its left
-           padding, which is where scroll-snap aligns a card). Returning
-           the first such card — not the last card within some fraction of
-           the width — keeps the indicator, Next and Previous in step:
-           at rest the snapped card's left edge sits exactly on that edge,
-           a card scrolled partly off the left fails the test, and the
-           next card is the first to pass it. */
+           visible card whose left edge is at or after the carousel's left
+           edge. The reference edge is the carousel's BORDER-box left edge,
+           not that edge plus the carousel's left padding. CSS scroll-snap
+           aligns a snapped card with the snapport, and the snapport is the
+           scroll container's PADDING box: with `scroll-snap-align: start`
+           a card at rest sits flush with the border-box left edge and the
+           20px of left padding is already scrolled past (the resting
+           scrollLeft is 20, not 0). Measuring from border-left + padding
+           made every snapped card fail this test by exactly the padding
+           width, which is the bug that survived two fix rounds: the
+           indicator read one card ahead, Next targeted two cards on, and
+           Previous aimed at the card already showing so it never moved.
+           The 2px tolerance covers sub-pixel rounding only; the previous
+           card sits a full card-step further left, so it can never pass
+           by accident. */
         function currentVisibleIndex(vis, track) {
-          var padLeft = parseFloat(window.getComputedStyle(track).paddingLeft) || 0;
-          var visibleLeft = track.getBoundingClientRect().left + padLeft;
+          var visibleLeft = track.getBoundingClientRect().left;
           for (var i = 0; i < vis.length; i++) {
             if (vis[i].getBoundingClientRect().left >= visibleLeft - 2) return i;
           }
@@ -644,9 +674,14 @@
           var track = document.getElementById('carousel');
           if (!track || !row) return;
           var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-          var padLeft = parseFloat(window.getComputedStyle(track).paddingLeft) || 0;
+          /* Land the card's left edge exactly on the carousel's border-box
+             left edge — the same edge scroll-snap aligns a card to (see
+             currentVisibleIndex). Subtracting the left padding here used
+             to leave every target one padding-width short of its snap
+             point, so Previous-to-first-card scrolled to 0 and mandatory
+             snap pulled straight back to where it started. */
           var target = track.scrollLeft +
-            (row.getBoundingClientRect().left - track.getBoundingClientRect().left) - padLeft;
+            (row.getBoundingClientRect().left - track.getBoundingClientRect().left);
           track.scrollTo({ left: Math.max(0, target), behavior: (smooth && !reduce) ? 'smooth' : 'auto' });
         }
 
@@ -717,9 +752,12 @@
               '</div></div>' +
               '<ul class="deals">' + dealsHtml + '</ul>' +
               '<div class="card-actions">' +
-              '<a class="btn-app" href="https://bitenow.ca" target="_blank" rel="noopener">Get the free app</a>' +
+              '<div class="store-btns">' +
+              '<a class="btn-app btn-store" href="https://apps.apple.com/ca/app/bitenow-deal-drop/id6759879777" target="_blank" rel="noopener">Download on the App Store</a>' +
+              '<a class="btn-app btn-store" href="https://play.google.com/store/apps/details?id=com.bitenow.deal.bitenow" target="_blank" rel="noopener">Get it on Google Play</a>' +
+              '</div>' +
               (dirUrl ? '<a class="btn-dir" href="' + esc(dirUrl) + '" target="_blank" rel="noopener">Directions</a>' : '') +
-              '<button type="button" class="btn-claim" data-claim="' + esc(g.name) + '">Own this place? Claim it free</button>' +
+              (g.listingStatus === 'claimed' ? '' : '<button type="button" class="btn-claim" data-claim="' + esc(g.name) + '">Own this place? Claim it free</button>') +
               '</div>';
             return card;
           });
@@ -932,7 +970,7 @@
         function fillClaimDatalist(groups) {
           var list = document.getElementById('claim-restaurant-list');
           if (!list) return;
-          list.innerHTML = groups.map(function (g) {
+          list.innerHTML = groups.filter(function (g) { return g.listingStatus !== 'claimed'; }).map(function (g) {
             return '<option value="' + esc(g.name) + '"></option>';
           }).join('');
         }
