@@ -440,7 +440,13 @@
         'use strict';
         var TZ = 'America/Toronto';
         var API = 'https://firestore.googleapis.com/v1/projects/bitenow-8f4b9/databases/(default)/documents/';
-        var GTA_CENTER = { lat: 43.74, lng: -79.05 };
+        var GTA_CENTER = { lat: 43.74, lng: -79.32 };
+        /* Default map frame: Mississauga (west) to Ajax (east), Vaughan
+           (north) down to just below the downtown Toronto waterfront, so
+           only a thin strip of Lake Ontario shows at the bottom. Centres
+           near Yonge and Eglinton. MapLibre fitBounds order:
+           [[west, south], [east, north]]. */
+        var GTA_BOUNDS = [[-79.70, 43.58], [-78.93, 43.90]];
         var CLAIM_EMAIL = 'bitenowapp@gmail.com';
 
         var state = {
@@ -877,15 +883,9 @@
         function showAllRestaurants() {
           clearFilter();
           var m = state.mapInstance;
-          if (m && state.groups.length) {
+          if (m) {
             try {
-              var lats = state.groups.map(function (g) { return g.lat; });
-              var lngs = state.groups.map(function (g) { return g.lng; });
-              m.fitBounds(
-                [[Math.min.apply(null, lngs), Math.min.apply(null, lats)],
-                 [Math.max.apply(null, lngs), Math.max.apply(null, lats)]],
-                { padding: 56, maxZoom: 13, duration: 600 }
-              );
+              m.fitBounds(GTA_BOUNDS, { padding: 0, duration: 600 });
             } catch (err) { /* map stays where it is */ }
           }
           var vis = visibleRows();
@@ -914,6 +914,10 @@
                 m.on('moveend', onMove);
                 m.on('zoomend', onMove);
               } catch (err) { /* filtering stays off */ }
+              /* Open on the GTA frame, not fitted to the pins: some
+                 restaurants sit far outside the GTA and a fit-to-pins
+                 opening view ends up mostly lake. */
+              try { m.fitBounds(GTA_BOUNDS, { padding: 0, duration: 0 }); } catch (err) { /* keep mounted view */ }
               applyViewportFilter();
             } else if (tries > 30) {
               clearInterval(state.mapHookTimer);
@@ -940,7 +944,7 @@
             mapHandle = MapHelpers.mountMap(mapEl, {
               places: places,
               center: GTA_CENTER,
-              zoom: 9,
+              zoom: 10,
               baseStyle: 'light',
               marker: function (_place, index, selected) {
                 return '<div class="pin' + (selected ? ' pin--on' : '') + '">' + (index + 1) + '</div>';
