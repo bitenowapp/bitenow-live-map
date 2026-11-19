@@ -180,6 +180,8 @@
         margin: 0 -20px; padding: 4px 20px 10px;
       }
       .carousel::-webkit-scrollbar { display: none; }
+      .carousel.dragging { scroll-snap-type: none; cursor: grabbing; }
+      .carousel.dragging * { user-select: none; -webkit-user-select: none; }
       .track { display: flex; gap: 16px; align-items: stretch; }
       .card {
         flex: 0 0 min(430px, 88vw);
@@ -605,6 +607,21 @@
           updateCarPos();
         }
 
+        /* Card positions are measured against the carousel's own box, not
+           offsetLeft: offsetLeft is relative to the page, scrollLeft is in
+           scroll coordinates, and mixing the two shifted the detected index
+           one card forward, which made Previous target the card already on
+           screen and appear dead. */
+        function currentVisibleIndex(vis, track) {
+          var current = 0;
+          var trackLeft = track.getBoundingClientRect().left;
+          var threshold = track.clientWidth * 0.5;
+          for (var i = 0; i < vis.length; i++) {
+            if (vis[i].getBoundingClientRect().left - trackLeft < threshold) current = i;
+          }
+          return current;
+        }
+
         function updateCarPos() {
           var pos = document.getElementById('car-pos');
           var prev = document.getElementById('car-prev');
@@ -612,10 +629,7 @@
           var vis = visibleRows();
           if (!vis.length) { pos.textContent = ''; prev.disabled = true; next.disabled = true; return; }
           var track = document.getElementById('carousel');
-          var current = 0;
-          for (var i = 0; i < vis.length; i++) {
-            if (vis[i].offsetLeft - track.scrollLeft < track.clientWidth * 0.5) current = i;
-          }
+          var current = currentVisibleIndex(vis, track);
           pos.textContent = (current + 1) + ' of ' + vis.length;
           prev.disabled = current === 0 && track.scrollLeft <= 4;
           next.disabled = current === vis.length - 1;
@@ -625,17 +639,17 @@
           var track = document.getElementById('carousel');
           if (!track || !row) return;
           var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-          track.scrollTo({ left: Math.max(0, row.offsetLeft - 20), behavior: (smooth && !reduce) ? 'smooth' : 'auto' });
+          var padLeft = parseFloat(window.getComputedStyle(track).paddingLeft) || 0;
+          var target = track.scrollLeft +
+            (row.getBoundingClientRect().left - track.getBoundingClientRect().left) - padLeft;
+          track.scrollTo({ left: Math.max(0, target), behavior: (smooth && !reduce) ? 'smooth' : 'auto' });
         }
 
         function stepCarousel(dir) {
           var vis = visibleRows();
           if (!vis.length) return;
           var track = document.getElementById('carousel');
-          var current = 0;
-          for (var i = 0; i < vis.length; i++) {
-            if (vis[i].offsetLeft - track.scrollLeft < track.clientWidth * 0.5) current = i;
-          }
+          var current = currentVisibleIndex(vis, track);
           var target = Math.min(vis.length - 1, Math.max(0, current + dir));
           scrollCarouselTo(vis[target], true);
         }
@@ -986,6 +1000,45 @@
             ticking = true;
             requestAnimationFrame(function () { ticking = false; updateCarPos(); });
           }, { passive: true });
+
+          /* Desktop mouse drag scrolls the cards. Touch keeps the native
+             swipe; only mouse drags are handled here so the two never fight.
+             Snap is suspended mid-drag (see .carousel.dragging) and the
+             click a drag ends with is swallowed so it cannot select a card
+             or follow a link the pointer happens to land on. */
+          var drag = null;
+          var suppressClick = false;
+          track.addEventListener('pointerdown', function (ev) {
+            if (ev.pointerType !== 'mouse' || ev.button !== 0) return;
+            if (ev.target.closest('a, button, input, textarea, select')) return;
+            drag = { x: ev.clientX, left: track.scrollLeft, moved: false };
+            ev.preventDefault(); /* keep the drag from selecting card text */
+          });
+          window.addEventListener('pointermove', function (ev) {
+            if (!drag) return;
+            var dx = ev.clientX - drag.x;
+            if (!drag.moved && Math.abs(dx) > 4) {
+              drag.moved = true;
+              track.classList.add('dragging');
+            }
+            if (drag.moved) track.scrollLeft = drag.left - dx;
+          });
+          window.addEventListener('pointerup', function () {
+            if (!drag) return;
+            if (drag.moved) suppressClick = true;
+            drag = null;
+            track.classList.remove('dragging');
+          });
+          window.addEventListener('pointercancel', function () {
+            drag = null;
+            track.classList.remove('dragging');
+          });
+          track.addEventListener('click', function (ev) {
+            if (!suppressClick) return;
+            suppressClick = false;
+            ev.stopPropagation();
+            ev.preventDefault();
+          }, true);
         }
 
         /* ---------- Data loading ---------- */
